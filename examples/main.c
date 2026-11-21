@@ -13,7 +13,7 @@ int main(void) {
         RLW_PushVertical(&ctx, 3, 10);
             DrawRectangleRec(RLW_Widget(&ctx), RED);
             RLW_PushHorizontal(&ctx, 4, 8);
-				Rectangle rec = RLW_WidgetSpan(&ctx, 2);
+				RLW_WidgetSpanREC(rec, &ctx, 2);
 				if(CheckCollisionPointRec(GetMousePosition(), rec))
 					DrawRectangleRec(rec, ColorBrightness(BLUE, .2f));
 				else

@@ -53,6 +53,12 @@ int RLW_Remaining(const RLW_Context *ctx);
 void RLW_Reset(RLW_Context *ctx);
 Rectangle RLW_Inset(Rectangle rect, float amount);
 
+#define RLW_WidgetREC(rec, ctx) \
+    Rectangle rec = RLW_Widget((ctx))
+
+#define RLW_WidgetSpanREC(rec, ctx, span) \
+    Rectangle rec = RLW_WidgetSpan((ctx), (span))
+
 #ifdef __cplusplus
 }
 #endif
