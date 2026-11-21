@@ -1,6 +1,6 @@
 #include "raylib.h"
 #define RLW_IMPLEMENTATION
-#include "rlWidgets.h"
+#include "rlw.h"
 
 int main(void) {
     InitWindow(800, 500, "RLW layout demo");

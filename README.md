@@ -11,6 +11,7 @@ It provides a stack-based layout system that assigns `Rectangle` values to widge
 - Nested horizontal and vertical layouts
 - Equal-sized rows and columns with configurable gaps
 - Slot spanning, peeking, skipping, and resetting
+- Convenience macros for declaring widget rectangles
 - No built-in widget rendering or global UI context
 
 ## Installation
@@ -52,9 +53,13 @@ int main(void) {
             DrawRectangleRec(RLW_Widget(&ctx), RED);
 
             RLW_PushHorizontal(&ctx, 4, 8);
-                DrawRectangleRec(RLW_WidgetSpan(&ctx, 2), BLUE);
-                DrawRectangleRec(RLW_Widget(&ctx), GREEN);
-                DrawRectangleRec(RLW_Widget(&ctx), ORANGE);
+                RLW_WidgetSpanREC(wide, ctx, 2);
+                RLW_WidgetREC(middle, ctx);
+                RLW_WidgetREC(right, ctx);
+
+                DrawRectangleRec(wide, BLUE);
+                DrawRectangleRec(middle, GREEN);
+                DrawRectangleRec(right, ORANGE);
             RLW_Pop(&ctx);
 
             DrawRectangleRec(RLW_Widget(&ctx), GOLD);
@@ -96,6 +101,44 @@ Rectangle right = RLW_Widget(&ctx);
 RLW_Pop(&ctx);
 ```
 
+## Rectangle declaration macros
+
+Two convenience macros declare a `Rectangle` and assign the next available slot:
+
+```c
+RLW_WidgetREC(name, ctx);
+RLW_WidgetSpanREC(name, ctx, span);
+```
+
+For example:
+
+```c
+RLW_Context ctx = {0};
+RLW_Begin(&ctx, (Rectangle){20, 20, 600, 200});
+RLW_PushHorizontal(&ctx, 4, 8);
+
+    RLW_WidgetREC(left, ctx);          // 1 column
+    RLW_WidgetSpanREC(center, ctx, 2); // 2 columns
+    RLW_WidgetREC(right, ctx);         // 1 column
+
+    DrawRectangleRec(left, RED);
+    DrawRectangleRec(center, BLUE);
+    DrawRectangleRec(right, GREEN);
+
+RLW_Pop(&ctx);
+RLW_End(&ctx);
+```
+
+These are equivalent to:
+
+```c
+Rectangle left = RLW_Widget(&ctx);
+Rectangle center = RLW_WidgetSpan(&ctx, 2);
+Rectangle right = RLW_Widget(&ctx);
+```
+
+**Important:** Pass the context **variable** (`ctx`), not `&ctx`, to these macros. They take its address internally. Use them where C allows a variable declaration, and include the trailing semicolon at the call site. If you already have a context pointer, call `RLW_Widget(ptr)` or `RLW_WidgetSpan(ptr, span)` directly.
+
 ## API reference
 
 | Function | Description |
@@ -113,6 +156,8 @@ RLW_Pop(&ctx);
 | `RLW_Remaining(ctx)` | Return the number of unconsumed slots |
 | `RLW_Reset(ctx)` | Reset the current layout's slot index |
 | `RLW_Inset(rect, amount)` | Return a rectangle inset on all four sides |
+| `RLW_WidgetREC(name, ctx)` | Declare a rectangle from the next slot (macro) |
+| `RLW_WidgetSpanREC(name, ctx, span)` | Declare a rectangle spanning multiple slots (macro) |
 
 ## Notes
 
@@ -121,3 +166,7 @@ RLW_Pop(&ctx);
 - Slot counts must be positive, gaps must be nonnegative, and allocations must not exceed the declared slot count. The implementation uses C `assert` checks for these conditions.
 - RLW only calculates rectangles. It does not draw widgets, handle input, clip rendering, or perform automatic content sizing.
 - The maximum nesting depth defaults to 64 and can be configured by defining `RLW_MAX_STACK` before including the header.
+
+## License
+
+Add your preferred license here.
