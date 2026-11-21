@@ -137,7 +137,7 @@ Rectangle center = RLW_WidgetSpan(&ctx, 2);
 Rectangle right = RLW_Widget(&ctx);
 ```
 
-**Important:** Pass the context **variable** (`ctx`), not `&ctx`, to these macros. They take its address internally. Use them where C allows a variable declaration, and include the trailing semicolon at the call site. If you already have a context pointer, call `RLW_Widget(ptr)` or `RLW_WidgetSpan(ptr, span)` directly.
+Pass a context pointer (such as `&ctx`) to the rectangle declaration macros. Use them where C allows a variable declaration and add a trailing semicolon.
 
 ## API reference
 
@@ -163,7 +163,7 @@ Rectangle right = RLW_Widget(&ctx);
 
 - Initialize each context with `RLW_Context ctx = {0};` before first use.
 - You can create multiple contexts; each owns its own layout stack.
-- Slot counts must be positive, gaps must be nonnegative, and allocations must not exceed the declared slot count. The implementation uses C `assert` checks for these conditions.
+- Slot counts must be positive, gaps must be nonnegative, and allocations must not exceed the declared slot count. RLW API macros pass the caller’s file and line to their corresponding `_Func` implementations. A failed assertion prints that location and the failed condition to standard error before aborting. Defining `NDEBUG` when compiling the implementation disables these checks.
 - RLW only calculates rectangles. It does not draw widgets, handle input, clip rendering, or perform automatic content sizing.
 - The maximum nesting depth defaults to 64 and can be configured by defining `RLW_MAX_STACK` before including the header.
 

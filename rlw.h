@@ -39,21 +39,39 @@ typedef struct RLW_Context {
     bool begun;
 } RLW_Context;
 
-void RLW_Begin(RLW_Context *ctx, Rectangle bounds);
-void RLW_End(RLW_Context *ctx);
-void RLW_PushHorizontal(RLW_Context *ctx, int columns, float padding);
-void RLW_PushVertical(RLW_Context *ctx, int rows, float padding);
-void RLW_Pop(RLW_Context *ctx);
-Rectangle RLW_Widget(RLW_Context *ctx);
-Rectangle RLW_WidgetSpan(RLW_Context *ctx, int span);
-Rectangle RLW_Peek(RLW_Context *ctx);
-Rectangle RLW_PeekSpan(RLW_Context *ctx, int span);
-void RLW_Skip(RLW_Context *ctx, int slots);
-int RLW_Remaining(const RLW_Context *ctx);
-void RLW_Reset(RLW_Context *ctx);
-Rectangle RLW_Inset(Rectangle rect, float amount);
+void RLW_Begin_Func(RLW_Context *ctx, Rectangle bounds, const char *filepath, const char *line);
+void RLW_End_Func(RLW_Context *ctx, const char *filepath, const char *line);
+void RLW_PushHorizontal_Func(RLW_Context *ctx, int columns, float padding, const char *filepath, const char *line);
+void RLW_PushVertical_Func(RLW_Context *ctx, int rows, float padding, const char *filepath, const char *line);
+void RLW_Pop_Func(RLW_Context *ctx, const char *filepath, const char *line);
+Rectangle RLW_Widget_Func(RLW_Context *ctx, const char *filepath, const char *line);
+Rectangle RLW_WidgetSpan_Func(RLW_Context *ctx, int span, const char *filepath, const char *line);
+Rectangle RLW_Peek_Func(RLW_Context *ctx, const char *filepath, const char *line);
+Rectangle RLW_PeekSpan_Func(RLW_Context *ctx, int span, const char *filepath, const char *line);
+void RLW_Skip_Func(RLW_Context *ctx, int slots, const char *filepath, const char *line);
+int RLW_Remaining_Func(const RLW_Context *ctx, const char *filepath, const char *line);
+void RLW_Reset_Func(RLW_Context *ctx, const char *filepath, const char *line);
+Rectangle RLW_Inset_Func(Rectangle rect, float amount, const char *filepath, const char *line);
 
-#define RLW_WidgetREC(rec, ctx) \
+#define RLW__STRINGIFY_IMPL(value) #value
+#define RLW__STRINGIFY(value)      RLW__STRINGIFY_IMPL(value)
+
+/* Variadic forwarding keeps C compound literals usable as arguments. */
+#define RLW_Begin(...)           RLW_Begin_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_End(...)             RLW_End_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_PushHorizontal(...)  RLW_PushHorizontal_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_PushVertical(...)    RLW_PushVertical_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_Pop(...)             RLW_Pop_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_Widget(...)          RLW_Widget_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_WidgetSpan(...)      RLW_WidgetSpan_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_Peek(...)            RLW_Peek_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_PeekSpan(...)        RLW_PeekSpan_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_Skip(...)            RLW_Skip_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_Remaining(...)       RLW_Remaining_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_Reset(...)           RLW_Reset_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+#define RLW_Inset(...)           RLW_Inset_Func(__VA_ARGS__, __FILE__, RLW__STRINGIFY(__LINE__))
+
+#define RLW_WidgetREC(rec, ctx)           \
     Rectangle rec = RLW_Widget((ctx))
 
 #define RLW_WidgetSpanREC(rec, ctx, span) \
@@ -67,16 +85,28 @@ Rectangle RLW_Inset(Rectangle rect, float amount);
 #ifdef RLW_IMPLEMENTATION
 #ifndef RLW_IMPLEMENTATION_INCLUDED
 #define RLW_IMPLEMENTATION_INCLUDED
-#include <assert.h>
+#ifndef NDEBUG
+#include <stdio.h>
+#include <stdlib.h>
 
-static RLW_Layout *RLW__current(RLW_Context *ctx) {
-    assert(ctx && ctx->begun && ctx->stack_count > 0);
+#define RLW__ASSERT(condition) do { \
+    if (!(condition)) { \
+        fprintf(stderr, "%s:%s: RLW assertion failed: %s\n", filepath, line, #condition); \
+        abort(); \
+    } \
+} while (0)
+#else
+#define RLW__ASSERT(condition) ((void)filepath, (void)line)
+#endif
+
+static RLW_Layout *RLW__current(RLW_Context *ctx, const char *filepath, const char *line) {
+    RLW__ASSERT(ctx && ctx->begun && ctx->stack_count > 0);
     return &ctx->stack[ctx->stack_count - 1];
 }
 
-static Rectangle RLW__slot(const RLW_Layout *layout, int index, int span) {
-    assert(layout && layout->count > 0);
-    assert(index >= 0 && span > 0 && span <= layout->count - index);
+static Rectangle RLW__slot(const RLW_Layout *layout, int index, int span, const char *filepath, const char *line) {
+    RLW__ASSERT(layout && layout->count > 0);
+    RLW__ASSERT(index >= 0 && span > 0 && span <= layout->count - index);
     Rectangle rect = layout->bounds;
     if (layout->direction == RLW_HORIZONTAL) {
         float cell = (rect.width - layout->padding * (layout->count - 1)) / layout->count;
@@ -90,79 +120,79 @@ static Rectangle RLW__slot(const RLW_Layout *layout, int index, int span) {
     return rect;
 }
 
-void RLW_Begin(RLW_Context *ctx, Rectangle bounds) {
-    assert(ctx && !ctx->begun);
-    assert(bounds.width >= 0 && bounds.height >= 0);
+void RLW_Begin_Func(RLW_Context *ctx, Rectangle bounds, const char *filepath, const char *line) {
+    RLW__ASSERT(ctx && !ctx->begun);
+    RLW__ASSERT(bounds.width >= 0 && bounds.height >= 0);
     ctx->bounds = bounds;
     ctx->stack_count = 0;
     ctx->begun = true;
 }
 
-void RLW_End(RLW_Context *ctx) {
-    assert(ctx && ctx->begun && ctx->stack_count == 0);
+void RLW_End_Func(RLW_Context *ctx, const char *filepath, const char *line) {
+    RLW__ASSERT(ctx && ctx->begun && ctx->stack_count == 0);
     ctx->begun = false;
 }
 
-static void RLW__push(RLW_Context *ctx, RLW_Direction direction, int count, float padding) {
-    assert(ctx && ctx->begun);
-    assert(count > 0 && padding >= 0);
-    assert(ctx->stack_count < RLW_MAX_STACK);
-    Rectangle bounds = ctx->stack_count ? RLW_Widget(ctx) : ctx->bounds;
+static void RLW__push(RLW_Context *ctx, RLW_Direction direction, int count, float padding, const char *filepath, const char *line) {
+    RLW__ASSERT(ctx && ctx->begun);
+    RLW__ASSERT(count > 0 && padding >= 0);
+    RLW__ASSERT(ctx->stack_count < RLW_MAX_STACK);
+    Rectangle bounds = ctx->stack_count ? RLW_Widget_Func(ctx, filepath, line) : ctx->bounds;
     RLW_Layout *layout = &ctx->stack[ctx->stack_count++];
     *layout = (RLW_Layout){ .bounds = bounds, .direction = direction,
                             .count = count, .index = 0, .padding = padding };
 }
 
-void RLW_PushHorizontal(RLW_Context *ctx, int columns, float padding) {
-    RLW__push(ctx, RLW_HORIZONTAL, columns, padding);
+void RLW_PushHorizontal_Func(RLW_Context *ctx, int columns, float padding, const char *filepath, const char *line) {
+    RLW__push(ctx, RLW_HORIZONTAL, columns, padding, filepath, line);
 }
 
-void RLW_PushVertical(RLW_Context *ctx, int rows, float padding) {
-    RLW__push(ctx, RLW_VERTICAL, rows, padding);
+void RLW_PushVertical_Func(RLW_Context *ctx, int rows, float padding, const char *filepath, const char *line) {
+    RLW__push(ctx, RLW_VERTICAL, rows, padding, filepath, line);
 }
 
-void RLW_Pop(RLW_Context *ctx) {
-    assert(ctx && ctx->begun && ctx->stack_count > 0);
+void RLW_Pop_Func(RLW_Context *ctx, const char *filepath, const char *line) {
+    RLW__ASSERT(ctx && ctx->begun && ctx->stack_count > 0);
     --ctx->stack_count;
 }
 
-Rectangle RLW_PeekSpan(RLW_Context *ctx, int span) {
-    RLW_Layout *layout = RLW__current(ctx);
-    return RLW__slot(layout, layout->index, span);
+Rectangle RLW_PeekSpan_Func(RLW_Context *ctx, int span, const char *filepath, const char *line) {
+    RLW_Layout *layout = RLW__current(ctx, filepath, line);
+    return RLW__slot(layout, layout->index, span, filepath, line);
 }
 
-Rectangle RLW_Peek(RLW_Context *ctx) {
-    return RLW_PeekSpan(ctx, 1);
+Rectangle RLW_Peek_Func(RLW_Context *ctx, const char *filepath, const char *line) {
+    return RLW_PeekSpan_Func(ctx, 1, filepath, line);
 }
 
-Rectangle RLW_WidgetSpan(RLW_Context *ctx, int span) {
-    Rectangle rect = RLW_PeekSpan(ctx, span);
-    RLW__current(ctx)->index += span;
+Rectangle RLW_WidgetSpan_Func(RLW_Context *ctx, int span, const char *filepath, const char *line) {
+    Rectangle rect = RLW_PeekSpan_Func(ctx, span, filepath, line);
+    RLW__current(ctx, filepath, line)->index += span;
     return rect;
 }
 
-Rectangle RLW_Widget(RLW_Context *ctx) {
-    return RLW_WidgetSpan(ctx, 1);
+Rectangle RLW_Widget_Func(RLW_Context *ctx, const char *filepath, const char *line) {
+    return RLW_WidgetSpan_Func(ctx, 1, filepath, line);
 }
 
-void RLW_Skip(RLW_Context *ctx, int slots) {
-    RLW_Layout *layout = RLW__current(ctx);
-    assert(slots >= 0 && slots <= layout->count - layout->index);
+void RLW_Skip_Func(RLW_Context *ctx, int slots, const char *filepath, const char *line) {
+    RLW_Layout *layout = RLW__current(ctx, filepath, line);
+    RLW__ASSERT(slots >= 0 && slots <= layout->count - layout->index);
     layout->index += slots;
 }
 
-int RLW_Remaining(const RLW_Context *ctx) {
-    assert(ctx && ctx->begun && ctx->stack_count > 0);
+int RLW_Remaining_Func(const RLW_Context *ctx, const char *filepath, const char *line) {
+    RLW__ASSERT(ctx && ctx->begun && ctx->stack_count > 0);
     const RLW_Layout *layout = &ctx->stack[ctx->stack_count - 1];
     return layout->count - layout->index;
 }
 
-void RLW_Reset(RLW_Context *ctx) {
-    RLW__current(ctx)->index = 0;
+void RLW_Reset_Func(RLW_Context *ctx, const char *filepath, const char *line) {
+    RLW__current(ctx, filepath, line)->index = 0;
 }
 
-Rectangle RLW_Inset(Rectangle rect, float amount) {
-    assert(amount >= 0);
+Rectangle RLW_Inset_Func(Rectangle rect, float amount, const char *filepath, const char *line) {
+    RLW__ASSERT(amount >= 0);
     rect.x += amount;
     rect.y += amount;
     rect.width -= 2 * amount;
@@ -171,6 +201,8 @@ Rectangle RLW_Inset(Rectangle rect, float amount) {
     if (rect.height < 0) rect.height = 0;
     return rect;
 }
+
+#undef RLW__ASSERT
 
 #endif /* RLW_IMPLEMENTATION_INCLUDED */
 #endif /* RLW_IMPLEMENTATION */
